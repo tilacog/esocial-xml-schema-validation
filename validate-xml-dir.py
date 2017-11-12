@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 import asyncio
+import csv
 import hashlib
 import os
 import shutil
 import sys
-from itertools import islice
+from contextlib import suppress
+from functools import partial
 from glob import glob
+from itertools import islice
 from subprocess import Popen, PIPE
 from xml.etree import ElementTree as ET
 
 
-ignore_missing_signature = (True if not os.environ.get('ENFORCE_SIGNATURE')
-                            else False)
-
+# configs
+report_as_csv = False
+ignore_missing_signature = (
+    True if not os.environ.get('ENFORCE_SIGNATURE') else False
+)
+term_columns, _ = shutil.get_terminal_size()
 xsd_base_path = os.environ["XSD_DIRECTORY"]
 xsd_paths = glob(xsd_base_path + '/**/*.xsd', recursive=True)
-
-term_columns, _ = shutil.get_terminal_size()
 
 
 def strip_ns(root_node):
@@ -147,7 +151,7 @@ async def full_validate_xml(xml_file):
     )
 
 
-def handle_result(result):
+def print_report(result):
     print('-' * term_columns)
     try:
         xml_file, sha256, namespace, xml_type, retcode, stdout, stderr = result
@@ -163,15 +167,34 @@ def handle_result(result):
         print(f'Validation:\t\t{retcode}')
         print(f'Errors ({len(stderr)}):')
         for err_line in stderr:
-
             print(f'- {err_line}')
+
+
+def csv_report(result, writer):
+    try:
+        xml_file, sha256, namespace, xml_type, retcode, _, stderr = result
+    except:
+        error, xml_file = result
+        sha256 = namespace = xml_type = retcode = ''
+        stderr = ["Couldn't parse file as XML"]
+    if not stderr:
+        writer.writerow([
+            xml_file, sha256, namespace, xml_type, retcode, "Valid XML file"
+        ])
+    for err_line in stderr:
+        writer.writerow([
+            xml_file, sha256, namespace, xml_type, retcode, err_line
+        ])
 
 
 if __name__ == '__main__':
     # cli
-    passed_files = sys.argv[1:]
-    xml_files = [f for f in passed_files if os.path.exists(f)]
-    not_found_files = [f for f in passed_files if not os.path.exists(f)]
+    args = sys.argv[1:]
+    with suppress(ValueError):
+        args.remove('--csv')
+        report_as_csv = True
+    xml_files = [f for f in args if os.path.exists(f)]
+    not_found_files = [f for f in args if not os.path.exists(f)]
     for f in not_found_files:
         print(f'WARNING: File not found: {f}', file=sys.stderr)
     if not xml_files:
@@ -179,7 +202,6 @@ if __name__ == '__main__':
     print(f'Preparing to validate {len(xml_files)} files')
     print('Ignoring missing signatures: ',
           'YES' if ignore_missing_signature else 'NO')
-    print('Go')
 
     # main loop
     to_do = [full_validate_xml(f) for f in xml_files]
@@ -188,5 +210,8 @@ if __name__ == '__main__':
     res, _ = loop.run_until_complete(wait_coroutine)
     loop.close()
 
+    # output
+    handle_outcome = (partial(csv_report, writer=csv.writer(sys.stdout))
+                      if report_as_csv else print_report)
     for outcome in res:
-        handle_result(outcome.result())
+        handle_outcome(outcome.result())

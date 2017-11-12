@@ -168,25 +168,24 @@ def handle_result(result):
 
 
 if __name__ == '__main__':
-
+    # cli
     passed_files = sys.argv[1:]
-
-    loop = asyncio.get_event_loop()
     xml_files = [f for f in passed_files if os.path.exists(f)]
     not_found_files = [f for f in passed_files if not os.path.exists(f)]
     for f in not_found_files:
         print(f'WARNING: File not found: {f}', file=sys.stderr)
-
     if not xml_files:
         sys.exit("ERROR: misisng file arguments")
-
     print(f'Preparing to validate {len(xml_files)} files')
     print('Ignoring missing signatures: ',
           'YES' if ignore_missing_signature else 'NO')
-    to_do = [full_validate_xml(f) for f in xml_files]
     print('Go')
+
+    # main loop
+    to_do = [full_validate_xml(f) for f in xml_files]
     wait_coroutine = asyncio.wait(to_do)
-    res, errs = loop.run_until_complete(wait_coroutine)
+    loop = asyncio.get_event_loop()
+    res, _ = loop.run_until_complete(wait_coroutine)
     loop.close()
 
     for outcome in res:

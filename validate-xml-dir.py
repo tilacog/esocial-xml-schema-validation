@@ -173,7 +173,7 @@ def print_report(result):
 def csv_report(result, writer):
     try:
         xml_file, sha256, namespace, xml_type, retcode, _, stderr = result
-    except:
+    except ValueError:
         error, xml_file = result
         sha256 = namespace = xml_type = retcode = ''
         stderr = ["Couldn't parse file as XML"]

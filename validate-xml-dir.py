@@ -16,7 +16,7 @@ from xml.etree import ElementTree as ET
 # configs
 report_as_csv = False
 ignore_missing_signature = (
-    True if not os.environ.get('ENFORCE_SIGNATURE') else False
+    True if os.environ.get('ENFORCESIGNATURE') is None else False
 )
 term_columns, _ = shutil.get_terminal_size()
 xsd_base_path = os.environ["XSD_DIRECTORY"]
@@ -43,7 +43,7 @@ def get_xsd_type(xsd_path):
     while not found:
         try:
             el = next(iterator)
-        except:
+        except:  # noqa
             break
         name = el.attrib.get('name')
         if not name:

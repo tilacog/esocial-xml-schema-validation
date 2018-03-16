@@ -30,7 +30,8 @@ def strip_ns(root_node):
             namespace_, tag = el.tag.split('}', 1)
             namespace = namespace_.strip('{')
             el.tag = tag
-    assert namespace
+    if not namespace:
+        raise RuntimeError("Xml file doesn't have a namespace")
     return root_node, namespace
 
 
@@ -84,7 +85,6 @@ def validate_xml(xml_path):
     stdout, stderr = p.communicate()
 
     stderr = fix_xml_text(stderr.decode('utf-8'))
-
     return (p.returncode, stdout.decode('utf-8').split('\n'),
             stderr.split('\n'))
 
@@ -213,5 +213,17 @@ if __name__ == '__main__':
     # output
     handle_outcome = (partial(csv_report, writer=csv.writer(sys.stdout))
                       if report_as_csv else print_report)
-    for outcome in res:
+
+
+    (oks, failures) = ([i for i in res if i.exception() is None],
+                       [i for i in res if i.exception() is not None])
+
+
+    if failures:
+        print("Failures")
+        print('-' * term_columns)
+    for fail in failures:
+        print('{}: {}'.format(fail.exception().__class__.__name__, fail.exception()))
+
+    for outcome in oks:
         handle_outcome(outcome.result())

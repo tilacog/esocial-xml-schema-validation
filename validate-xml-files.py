@@ -13,6 +13,11 @@ from subprocess import Popen, PIPE
 from xml.etree import ElementTree as ET
 
 
+def eprint(*args, **kwargs):
+    "prints to stderr"
+    print(*args, **kwargs, file=sys.stderr)
+
+
 # configs
 report_as_csv = False
 ignore_missing_signature = (
@@ -196,7 +201,7 @@ if __name__ == '__main__':
     xml_files = [f for f in args if os.path.exists(f)]
     not_found_files = [f for f in args if not os.path.exists(f)]
     for f in not_found_files:
-        print(f'WARNING: File not found: {f}', file=sys.stderr)
+        eprint(f'WARNING: File not found: {f}')
     if not xml_files:
         sys.exit("ERROR: misisng file arguments")
     print(f'Preparing to validate {len(xml_files)} files')
@@ -210,20 +215,24 @@ if __name__ == '__main__':
     res, _ = loop.run_until_complete(wait_coroutine)
     loop.close()
 
+    results_and_files = zip(res, xml_files)
+    (oks, failures) = (
+        [(i, j) for (i, j) in results_and_files if i.exception() is None],
+        [(i, j) for (i, j) in results_and_files if i.exception() is not None]
+    )
+
+    if failures:
+        eprint("Failures")
+        eprint('-' * term_columns)
+    for (fail, filename) in failures:
+        eprint('{}: {}'.format(
+            fail.exception().__class__.__name__,
+            fail.exception()
+        ))
+
     # output
     handle_outcome = (partial(csv_report, writer=csv.writer(sys.stdout))
                       if report_as_csv else print_report)
 
-
-    (oks, failures) = ([i for i in res if i.exception() is None],
-                       [i for i in res if i.exception() is not None])
-
-
-    if failures:
-        print("Failures")
-        print('-' * term_columns)
-    for fail in failures:
-        print('{}: {}'.format(fail.exception().__class__.__name__, fail.exception()))
-
-    for outcome in oks:
-        handle_outcome(outcome.result())
+    for (ok, filename) in oks:
+        handle_outcome(ok.result())
